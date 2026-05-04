@@ -45,7 +45,7 @@ local player = {
     speed = CONFIG.PlayerSpeed,
 }
 
--- NanoVG 上下文（由 UI 系统管理，在 NanoVGRender 中通过 eventData 获取）
+-- NanoVG 上下文（独立创建，用于绘制游戏世界）
 ---@type integer
 local vg_ = nil
 
@@ -56,6 +56,15 @@ local vg_ = nil
 function Start()
     graphics.windowTitle = CONFIG.Title
 
+    -- 1. 创建独立 NanoVG 上下文用于绘制游戏世界
+    vg_ = nvgCreate(1)
+    if vg_ == nil then
+        print("ERROR: Failed to create NanoVG context")
+        return
+    end
+    print("NanoVG context created successfully")
+
+    -- 2. 初始化 UI 系统（HUD 等）
     InitUI()
     CreateGameContent()
     CreateUI()
@@ -67,6 +76,11 @@ function Start()
 end
 
 function Stop()
+    -- 清理 NanoVG 上下文
+    if vg_ ~= nil then
+        nvgDelete(vg_)
+        vg_ = nil
+    end
     UI.Shutdown()
 end
 
@@ -88,8 +102,8 @@ end
 function SubscribeToEvents()
     SubscribeToEvent("Update", "HandleUpdate")
     SubscribeToEvent("KeyDown", "HandleKeyDown")
-    -- 使用 NanoVGRender 事件绘制游戏世界
-    SubscribeToEvent("NanoVGRender", "HandleNanoVGRender")
+    -- ⚠️ NanoVGRender 必须绑定到具体的 nvg 上下文对象
+    SubscribeToEvent(vg_, "NanoVGRender", "HandleNanoVGRender")
 end
 
 -- ============================================================================
@@ -297,11 +311,15 @@ end
 -- ============================================================================
 
 ---@param eventType string
----@param eventData NanoVGRenderEventData
+---@param eventData table
 function HandleNanoVGRender(eventType, eventData)
-    vg_ = eventData["NanoVGContext"]:GetVoidPtr()
-    local w = eventData["Width"]:GetInt()
-    local h = eventData["Height"]:GetInt()
+    if vg_ == nil then return end
+
+    local gfx = GetGraphics()
+    local w = gfx:GetWidth()
+    local h = gfx:GetHeight()
+
+    nvgBeginFrame(vg_, w, h, 1.0)
 
     -- 计算地图在屏幕上的偏移（居中显示）
     local offsetX = (w - CONFIG.MapWidth) / 2
@@ -315,6 +333,8 @@ function HandleNanoVGRender(eventType, eventData)
 
     -- 绘制玩家
     DrawPlayer(offsetX, offsetY)
+
+    nvgEndFrame(vg_)
 end
 
 --- 绘制地图背景
