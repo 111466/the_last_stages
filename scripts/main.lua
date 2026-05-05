@@ -33,6 +33,9 @@ function Start()
         return
     end
 
+    -- 创建字体（必须在使用 nvgText 之前调用，且只调用一次）
+    nvgCreateFont(nvg_, "sans", "Fonts/MiSans-Regular.ttf")
+
     gold_ = Config.INITIAL_GOLD
     lives_ = Config.INITIAL_LIVES
     Hero.Init()
@@ -151,6 +154,9 @@ function HandleNanoVGRender(eventType, eventData)
     local screenHeight = graphics:GetHeight() / dpr
 
     nvgBeginFrame(nvg_, screenWidth, screenHeight, dpr)
+
+    -- 设置默认字体
+    nvgFontFace(nvg_, "sans")
 
     nvgBeginPath(nvg_)
     nvgRect(nvg_, 0, 0, screenWidth, screenHeight)

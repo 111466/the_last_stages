@@ -77,7 +77,7 @@ function UI.DrawHeroBars(nvg, heroState)
     local hpRatio = heroState.hp / heroState.maxHP
     local hpColor = hpRatio > 0.5 and {80, 200, 80}
         or (hpRatio > 0.25 and {220, 180, 40} or {220, 50, 50})
-    nvgFillColor(nvg, hpColor[1], hpColor[2], hpColor[3], 255)
+    nvgFillColor(nvg, nvgRGBA(hpColor[1], hpColor[2], hpColor[3], 255))
     nvgBeginPath(nvg)
     nvgRoundedRect(nvg, bx, by, 180 * hpRatio, 16, 4)
     nvgFill(nvg)
@@ -182,7 +182,7 @@ function UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
         nvgRoundedRect(nvg, tx, ty, 75, 55, 6)
         nvgStroke(nvg)
 
-        nvgFillColor(nvg, config.color[1], config.color[2], config.color[3], 255)
+        nvgFillColor(nvg, nvgRGBA(config.color[1], config.color[2], config.color[3], 255))
         nvgBeginPath(nvg)
         nvgCircle(nvg, tx + 37, ty + 18, 12)
         nvgFill(nvg)

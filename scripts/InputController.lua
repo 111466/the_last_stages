@@ -64,10 +64,11 @@ function InputController.HandleInput(dt)
         actions.castY = Hero.state.y
     end
     if input:GetKeyPress(KEY_4) then
-        local mx, my = input:GetMousePosition()
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
         actions.castSkill = 4
-        actions.castX = mx
-        actions.castY = my
+        actions.castX = pos.x / dpr
+        actions.castY = pos.y / dpr
     end
 
     if input:GetKeyPress(KEY_F1) then actions.upgradeSkill = 1 end
@@ -81,9 +82,12 @@ function InputController.HandleInput(dt)
     if input:GetKeyPress(KEY_U) then actions.upgradeSelectedTower = true end
 
     if input:GetMouseButtonPress(MOUSEB_LEFT) then
-        local mx, my = input:GetMousePosition()
-        local screenWidth = graphics:GetWidth() / graphics:GetDPR()
-        local screenHeight = graphics:GetHeight() / graphics:GetDPR()
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
+        local mx = pos.x / dpr
+        local my = pos.y / dpr
+        local screenWidth = graphics:GetWidth() / dpr
+        local screenHeight = graphics:GetHeight() / dpr
 
         local towerType = UI.GetTowerCardAt(mx, my, screenWidth, screenHeight)
         if towerType then
@@ -106,7 +110,10 @@ function InputController.HandleInput(dt)
     end
 
     if input:GetMouseButtonDown(MOUSEB_RIGHT) then
-        local mx, my = input:GetMousePosition()
+        local pos = input:GetMousePosition()
+        local dpr = graphics:GetDPR()
+        local mx = pos.x / dpr
+        local my = pos.y / dpr
         if s.placingTower then
             actions.placeTower = s.placingTower
             actions.placeX = mx
