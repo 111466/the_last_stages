@@ -1,3 +1,4 @@
+
 local Config = require("scripts/Config")
 local Utils = require("scripts/Utils")
 local Path = require("scripts/Path")
@@ -6,6 +7,10 @@ local Tower = require("scripts/Tower")
 local Projectile = require("scripts/Projectile")
 local WaveManager = require("scripts/WaveManager")
 local GameUI = require("scripts/UI")
+local GridMap = require("scripts/GridMap")
+local RoutePlanner = require("scripts/RoutePlanner")
+local Structure = require("scripts/Structure")
+local BuildValidator = require("scripts/BuildValidator")
 
 local vg_ = nil
 
@@ -14,6 +19,7 @@ local pointer_ = {
     x = 0,
     y = 0,
 }
+local debugMode_ = true
 
 local function getGraphicsSize()
     local graphicsSubsystem = GetGraphics()
@@ -70,7 +76,7 @@ end
 local function getTransform()
     local screenWidth, screenHeight = getGraphicsSize()
     local scale = math.min(screenWidth / Config.WorldWidth, screenHeight / Config.WorldHeight)
-    if scale <= 0 then
+    if scale &lt;= 0 then
         scale = 1
     end
 
@@ -89,7 +95,7 @@ local function screenToWorld(screenX, screenY)
 end
 
 local function isInsideWorld(x, y)
-    return x >= 0 and x <= Config.WorldWidth and y >= 0 and y <= Config.WorldHeight
+    return x &gt;= 0 and x &lt;= Config.WorldWidth and y &gt;= 0 and y &lt;= Config.WorldHeight
 end
 
 local function resetGame()
@@ -97,13 +103,28 @@ local function resetGame()
     game_.gold = Config.StartGold
     game_.lives = Config.StartLives
     game_.path = Path.Create(Config)
+    game_.gridMap = GridMap.Create(Config)
+    game_.currentRoute = nil
     game_.enemies = {}
     game_.towers = {}
     game_.projectiles = {}
+    game_.structures = {}
     game_.waveManager = WaveManager.Create()
     game_.selectedTowerType = Config.TowerOrder[1]
+    game_.selectedStructureType = "barricade"
     game_.selectedTower = nil
     game_.hoverSlotIndex = nil
+    game_.hoverGridX = nil
+    game_.hoverGridY = nil
+    game_.buildMode = "tower"
+    game_.message = nil
+    game_.messageTimer = 0
+
+    if #game_.gridMap.spawnPoints &gt; 0 and #game_.gridMap.goalPoints &gt; 0 then
+        local spawn = game_.gridMap.spawnPoints[1]
+        local goal = game_.gridMap.goalPoints[1]
+        game_.currentRoute = RoutePlanner.FindPath(game_.gridMap, spawn.x, spawn.y, goal.x, goal.y)
+    end
 end
 
 local function startRun()
@@ -168,7 +189,7 @@ local function tryPlaceTower(slotIndex)
     end
 
     local cost = Tower.GetCost(game_.selectedTowerType)
-    if game_.gold < cost then
+    if game_.gold &lt; cost then
         return
     end
 
@@ -190,7 +211,7 @@ local function tryUpgradeSelectedTower()
     end
 
     local cost = Tower.GetUpgradeCost(game_.selectedTower)
-    if game_.gold < cost then
+    if game_.gold &lt; cost then
         return
     end
 
@@ -221,14 +242,74 @@ local function cleanupEnemies()
     end
 end
 
+local function showMessage(text, duration)
+    game_.message = text
+    game_.messageTimer = duration or 2.0
+end
+
 local function refreshHoverState()
     local worldX, worldY = screenToWorld(pointer_.x, pointer_.y)
     if game_.state ~= "playing" or not isInsideWorld(worldX, worldY) then
         game_.hoverSlotIndex = nil
+        game_.hoverGridX = nil
+        game_.hoverGridY = nil
         return
     end
 
     game_.hoverSlotIndex = findSlotAt(worldX, worldY)
+
+    if game_.gridMap then
+        local gx, gy = GridMap.WorldToGrid(game_.gridMap, worldX, worldY)
+        game_.hoverGridX = gx
+        game_.hoverGridY = gy
+    end
+end
+
+local function recalculateRoute()
+    if not game_.gridMap or #game_.gridMap.spawnPoints == 0 or #game_.gridMap.goalPoints == 0 then
+        return
+    end
+    local spawn = game_.gridMap.spawnPoints[1]
+    local goal = game_.gridMap.goalPoints[1]
+    game_.currentRoute = RoutePlanner.FindPath(game_.gridMap, spawn.x, spawn.y, goal.x, goal.y)
+end
+
+local function tryPlaceStructure(gridX, gridY)
+    local canPlace, reason = BuildValidator.CanPlaceStructure(game_.gridMap, game_.structures, gridX, gridY)
+    if not canPlace then
+        showMessage(reason, 1.5)
+        return false
+    end
+
+    if BuildValidator.WouldBlockPathCompletely(game_.gridMap, game_.structures, gridX, gridY) then
+        showMessage("会完全封死敌人路线", 1.5)
+        return false
+    end
+
+    local definition = Config.StructureTypes[game_.selectedStructureType]
+    if game_.gold &lt; definition.cost then
+        showMessage("金币不足", 1.5)
+        return false
+    end
+
+    local worldX, worldY = GridMap.GridToWorld(game_.gridMap, gridX, gridY)
+    local structure = Structure.Create(game_.selectedStructureType, gridX, gridY, worldX, worldY)
+    if not structure then
+        return false
+    end
+
+    game_.structures[#game_.structures + 1] = structure
+    game_.gold = game_.gold - definition.cost
+
+    local tile = GridMap.GetTile(game_.gridMap, gridX, gridY)
+    if tile then
+        tile.blocked = true
+        tile.occupantType = "structure"
+        tile.structureId = structure.id
+    end
+
+    recalculateRoute()
+    return true
 end
 
 local function updateGameUI()
@@ -258,6 +339,10 @@ local function updateGameUI()
 end
 
 local function updatePlaying(dt)
+    for _, structure in ipairs(game_.structures) do
+        Structure.Update(structure, dt)
+    end
+
     for _, enemy in ipairs(game_.enemies) do
         Enemy.Update(enemy, dt, game_.path)
     end
@@ -270,11 +355,18 @@ local function updatePlaying(dt)
         Projectile.Update(projectile, dt, game_.enemies, Enemy)
     end
 
+    if game_.messageTimer &gt; 0 then
+        game_.messageTimer = game_.messageTimer - dt
+        if game_.messageTimer &lt;= 0 then
+            game_.message = nil
+        end
+    end
+
     cleanupProjectiles()
     cleanupEnemies()
     WaveManager.Update(game_.waveManager, dt, spawnEnemy, countAliveEnemies)
 
-    if game_.lives <= 0 then
+    if game_.lives &lt;= 0 then
         game_.state = "game_over"
         game_.selectedTower = nil
     elseif WaveManager.IsFinished(game_.waveManager) and countAliveEnemies() == 0 and #game_.projectiles == 0 then
@@ -295,22 +387,26 @@ local function drawWorldBackground(nvg, transform)
     nvgFillColor(nvg, nvgRGBA(colors.background[1], colors.background[2], colors.background[3], colors.background[4]))
     nvgFill(nvg)
 
-    nvgBeginPath(nvg)
-    for gridX = gridSize, Config.WorldWidth - 1, gridSize do
-        local sx1, sy1 = Utils.ToScreen(transform, gridX, 0)
-        local sx2, sy2 = Utils.ToScreen(transform, gridX, Config.WorldHeight)
-        nvgMoveTo(nvg, sx1, sy1)
-        nvgLineTo(nvg, sx2, sy2)
+    if game_.gridMap then
+        GridMap.Draw(nvg, game_.gridMap, transform, colors)
+    else
+        nvgBeginPath(nvg)
+        for gridX = gridSize, Config.WorldWidth - 1, gridSize do
+            local sx1, sy1 = Utils.ToScreen(transform, gridX, 0)
+            local sx2, sy2 = Utils.ToScreen(transform, gridX, Config.WorldHeight)
+            nvgMoveTo(nvg, sx1, sy1)
+            nvgLineTo(nvg, sx2, sy2)
+        end
+        for gridY = gridSize, Config.WorldHeight - 1, gridSize do
+            local sx1, sy1 = Utils.ToScreen(transform, 0, gridY)
+            local sx2, sy2 = Utils.ToScreen(transform, Config.WorldWidth, gridY)
+            nvgMoveTo(nvg, sx1, sy1)
+            nvgLineTo(nvg, sx2, sy2)
+        end
+        nvgStrokeColor(nvg, nvgRGBA(colors.grid[1], colors.grid[2], colors.grid[3], colors.grid[4]))
+        nvgStrokeWidth(nvg, 1)
+        nvgStroke(nvg)
     end
-    for gridY = gridSize, Config.WorldHeight - 1, gridSize do
-        local sx1, sy1 = Utils.ToScreen(transform, 0, gridY)
-        local sx2, sy2 = Utils.ToScreen(transform, Config.WorldWidth, gridY)
-        nvgMoveTo(nvg, sx1, sy1)
-        nvgLineTo(nvg, sx2, sy2)
-    end
-    nvgStrokeColor(nvg, nvgRGBA(colors.grid[1], colors.grid[2], colors.grid[3], colors.grid[4]))
-    nvgStrokeWidth(nvg, 1)
-    nvgStroke(nvg)
 
     nvgBeginPath(nvg)
     nvgRect(nvg, x, y, width, height)
@@ -363,7 +459,7 @@ local function drawPlacementPreview(nvg, transform)
     local x, y = Utils.ToScreen(transform, slot.x, slot.y)
     local size = Utils.ToScreenSize(transform, definition.size)
     local range = Utils.ToScreenSize(transform, definition.range)
-    local affordable = game_.gold >= definition.cost
+    local affordable = game_.gold &gt;= definition.cost
     local alpha = affordable and 180 or 80
 
     nvgBeginPath(nvg)
@@ -379,6 +475,36 @@ local function drawPlacementPreview(nvg, transform)
     nvgStroke(nvg)
 end
 
+local function drawStructurePlacementPreview(nvg, transform)
+    if game_.state ~= "playing" or not game_.hoverGridX or not game_.hoverGridY then
+        return
+    end
+
+    if not game_.gridMap then
+        return
+    end
+
+    local tile = GridMap.GetTile(game_.gridMap, game_.hoverGridX, game_.hoverGridY)
+    if not tile or not tile.fortifiable then
+        return
+    end
+
+    local definition = Config.StructureTypes[game_.selectedStructureType]
+    local worldX, worldY = GridMap.GridToWorld(game_.gridMap, game_.hoverGridX, game_.hoverGridY)
+    local x, y = Utils.ToScreen(transform, worldX, worldY)
+    local size = Utils.ToScreenSize(transform, definition.size)
+    local affordable = game_.gold &gt;= definition.cost
+    local alpha = affordable and 150 or 60
+
+    nvgBeginPath(nvg)
+    nvgRect(nvg, x - size * 0.5, y - size * 0.5, size, size)
+    nvgFillColor(nvg, nvgRGBA(definition.color[1], definition.color[2], definition.color[3], alpha))
+    nvgStrokeColor(nvg, nvgRGBA(definition.outline[1], definition.outline[2], definition.outline[3], alpha))
+    nvgStrokeWidth(nvg, math.max(2, size * 0.12))
+    nvgFill(nvg)
+    nvgStroke(nvg)
+end
+
 local function drawPausedOverlay(nvg, transform)
     if game_.state ~= "paused" then
         return
@@ -388,6 +514,26 @@ local function drawPausedOverlay(nvg, transform)
     nvgRect(nvg, transform.ox, transform.oy, Config.WorldWidth * transform.scale, Config.WorldHeight * transform.scale)
     nvgFillColor(nvg, nvgRGBA(0, 0, 0, 110))
     nvgFill(nvg)
+end
+
+local function drawMessage(nvg, transform)
+    if not game_.message or game_.messageTimer &lt;= 0 then
+        return
+    end
+
+    local centerX = transform.ox + (Config.WorldWidth * transform.scale) * 0.5
+    local centerY = transform.oy + (Config.WorldHeight * transform.scale) * 0.15
+
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, centerX - 200, centerY - 30, 400, 60, 12)
+    nvgFillColor(nvg, nvgRGBA(0, 0, 0, 180))
+    nvgFill(nvg)
+
+    nvgFontSize(nvg, 20)
+    nvgFontFace(nvg, "sans")
+    nvgTextAlign(nvg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
+    nvgFillColor(nvg, nvgRGBA(255, 200, 100, 255))
+    nvgText(nvg, centerX, centerY, game_.message)
 end
 
 local function handlePointerPressed(screenX, screenY)
@@ -423,6 +569,12 @@ local function handlePointerPressed(screenX, screenY)
     if slotIndex then
         tryPlaceTower(slotIndex)
         return
+    end
+
+    if game_.gridMap and game_.hoverGridX and game_.hoverGridY then
+        if tryPlaceStructure(game_.hoverGridX, game_.hoverGridY) then
+            return
+        end
     end
 
     game_.selectedTower = nil
@@ -562,8 +714,17 @@ function HandleNanoVGRender(eventType, eventData)
     nvgBeginFrame(vg_, transform.screenWidth, transform.screenHeight, 1.0)
 
     drawWorldBackground(vg_, transform)
+    
+    if game_.currentRoute and debugMode_ then
+        RoutePlanner.Draw(vg_, game_.currentRoute, game_.gridMap, transform, Config.Colors)
+    end
+    
     Path.Draw(vg_, game_.path, transform, Config.Colors)
     drawBuildSlots(vg_, transform)
+
+    for _, structure in ipairs(game_.structures) do
+        Structure.Draw(vg_, structure, transform)
+    end
 
     for _, projectile in ipairs(game_.projectiles) do
         Projectile.Draw(vg_, projectile, transform)
@@ -578,7 +739,10 @@ function HandleNanoVGRender(eventType, eventData)
     end
 
     drawPlacementPreview(vg_, transform)
+    drawStructurePlacementPreview(vg_, transform)
     drawPausedOverlay(vg_, transform)
+    drawMessage(vg_, transform)
 
     nvgEndFrame(vg_)
 end
+

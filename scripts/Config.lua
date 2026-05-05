@@ -3,11 +3,15 @@ local Config = {}
 Config.WindowTitle = "Tiny Swords Tower Defense"
 
 Config.WorldWidth = 1280
-Config.WorldHeight = 720
+Config.WorldHeight = 768
 Config.PathWidth = 54
 
 Config.StartGold = 180
 Config.StartLives = 20
+
+Config.TileSize = 64
+Config.GridWidth = 20
+Config.GridHeight = 12
 
 Config.TowerOrder = { "archer", "warrior", "monk" }
 
@@ -20,6 +24,19 @@ Config.BuildSlots = {
     { x = 890, y = 540 },
     { x = 1040, y = 290 },
     { x = 1160, y = 560 },
+}
+
+Config.StructureTypes = {
+    barricade = {
+        name = "路障",
+        cost = 25,
+        health = 100,
+        maxHealth = 100,
+        size = 40,
+        color = { 160, 120, 80, 255 },
+        outline = { 200, 170, 130, 255 },
+        blocksPath = true,
+    }
 }
 
 Config.Colors = {
