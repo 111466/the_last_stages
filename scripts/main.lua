@@ -76,7 +76,7 @@ end
 local function getTransform()
     local screenWidth, screenHeight = getGraphicsSize()
     local scale = math.min(screenWidth / Config.WorldWidth, screenHeight / Config.WorldHeight)
-    if scale &lt;= 0 then
+    if scale <= 0 then
         scale = 1
     end
 
@@ -95,7 +95,7 @@ local function screenToWorld(screenX, screenY)
 end
 
 local function isInsideWorld(x, y)
-    return x &gt;= 0 and x &lt;= Config.WorldWidth and y &gt;= 0 and y &lt;= Config.WorldHeight
+    return x >= 0 and x <= Config.WorldWidth and y >= 0 and y <= Config.WorldHeight
 end
 
 local function resetGame()
@@ -120,7 +120,7 @@ local function resetGame()
     game_.message = nil
     game_.messageTimer = 0
 
-    if #game_.gridMap.spawnPoints &gt; 0 and #game_.gridMap.goalPoints &gt; 0 then
+    if #game_.gridMap.spawnPoints > 0 and #game_.gridMap.goalPoints > 0 then
         local spawn = game_.gridMap.spawnPoints[1]
         local goal = game_.gridMap.goalPoints[1]
         game_.currentRoute = RoutePlanner.FindPath(game_.gridMap, spawn.x, spawn.y, goal.x, goal.y)
@@ -189,7 +189,7 @@ local function tryPlaceTower(slotIndex)
     end
 
     local cost = Tower.GetCost(game_.selectedTowerType)
-    if game_.gold &lt; cost then
+    if game_.gold < cost then
         return
     end
 
@@ -211,7 +211,7 @@ local function tryUpgradeSelectedTower()
     end
 
     local cost = Tower.GetUpgradeCost(game_.selectedTower)
-    if game_.gold &lt; cost then
+    if game_.gold < cost then
         return
     end
 
@@ -287,7 +287,7 @@ local function tryPlaceStructure(gridX, gridY)
     end
 
     local definition = Config.StructureTypes[game_.selectedStructureType]
-    if game_.gold &lt; definition.cost then
+    if game_.gold < definition.cost then
         showMessage("金币不足", 1.5)
         return false
     end
@@ -355,9 +355,9 @@ local function updatePlaying(dt)
         Projectile.Update(projectile, dt, game_.enemies, Enemy)
     end
 
-    if game_.messageTimer &gt; 0 then
+    if game_.messageTimer > 0 then
         game_.messageTimer = game_.messageTimer - dt
-        if game_.messageTimer &lt;= 0 then
+        if game_.messageTimer <= 0 then
             game_.message = nil
         end
     end
@@ -366,7 +366,7 @@ local function updatePlaying(dt)
     cleanupEnemies()
     WaveManager.Update(game_.waveManager, dt, spawnEnemy, countAliveEnemies)
 
-    if game_.lives &lt;= 0 then
+    if game_.lives <= 0 then
         game_.state = "game_over"
         game_.selectedTower = nil
     elseif WaveManager.IsFinished(game_.waveManager) and countAliveEnemies() == 0 and #game_.projectiles == 0 then
@@ -459,7 +459,7 @@ local function drawPlacementPreview(nvg, transform)
     local x, y = Utils.ToScreen(transform, slot.x, slot.y)
     local size = Utils.ToScreenSize(transform, definition.size)
     local range = Utils.ToScreenSize(transform, definition.range)
-    local affordable = game_.gold &gt;= definition.cost
+    local affordable = game_.gold >= definition.cost
     local alpha = affordable and 180 or 80
 
     nvgBeginPath(nvg)
@@ -493,7 +493,7 @@ local function drawStructurePlacementPreview(nvg, transform)
     local worldX, worldY = GridMap.GridToWorld(game_.gridMap, game_.hoverGridX, game_.hoverGridY)
     local x, y = Utils.ToScreen(transform, worldX, worldY)
     local size = Utils.ToScreenSize(transform, definition.size)
-    local affordable = game_.gold &gt;= definition.cost
+    local affordable = game_.gold >= definition.cost
     local alpha = affordable and 150 or 60
 
     nvgBeginPath(nvg)
@@ -517,7 +517,7 @@ local function drawPausedOverlay(nvg, transform)
 end
 
 local function drawMessage(nvg, transform)
-    if not game_.message or game_.messageTimer &lt;= 0 then
+    if not game_.message or game_.messageTimer <= 0 then
         return
     end
 

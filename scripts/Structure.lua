@@ -35,11 +35,11 @@ end
 function Structure.Damage(structure, amount)
     structure.health = structure.health - amount
     structure.hitFlash = 0.15
-    return structure.health &lt;= 0
+    return structure.health <= 0
 end
 
 function Structure.Update(structure, dt)
-    if structure.hitFlash &gt; 0 then
+    if structure.hitFlash > 0 then
         structure.hitFlash = math.max(0, structure.hitFlash - dt)
     end
 end
@@ -47,7 +47,7 @@ end
 function Structure.Draw(nvg, structure, transform)
     local x, y = Utils.ToScreen(transform, structure.x, structure.y)
     local size = Utils.ToScreenSize(transform, structure.size)
-    local flash = structure.hitFlash &gt; 0 and 40 or 0
+    local flash = structure.hitFlash > 0 and 40 or 0
 
     nvgBeginPath(nvg)
     nvgRect(nvg, x - size * 0.5, y - size * 0.5, size, size)
