@@ -16,6 +16,11 @@ UI = require("scripts.UI")
 local gold_ = Config.INITIAL_GOLD
 local lives_ = Config.INITIAL_LIVES
 local nvg_ = nil
+local gameState = {
+    phase = "title",
+    currentLevel = nil,
+    isBattleFinished = false,
+}
 
 local function AddBattleRewards(reward, kills)
     if reward and reward > 0 then
@@ -24,6 +29,45 @@ local function AddBattleRewards(reward, kills)
     if kills and kills > 0 then
         Hero.state.killCount = Hero.state.killCount + kills
     end
+end
+
+local function ResetBattleObjects()
+    Tower.list = {}
+    Tower.selected = nil
+    Projectile.list = {}
+    Particle.list = {}
+    Enemy.list = {}
+    InputController.Reset()
+end
+
+local function EnterTitle()
+    gameState.phase = "title"
+    gameState.currentLevel = nil
+    gameState.isBattleFinished = false
+    gold_ = Config.INITIAL_GOLD
+    lives_ = Config.INITIAL_LIVES
+    ResetBattleObjects()
+end
+
+local function EnterLevelSelect()
+    gameState.phase = "level_select"
+    gameState.isBattleFinished = false
+    InputController.Reset()
+end
+
+local function StartLevel(levelId)
+    local level = Config.GetLevelById(levelId)
+    gameState.phase = "battle"
+    gameState.currentLevel = level
+    gameState.isBattleFinished = false
+
+    gold_ = level.initialGold or Config.INITIAL_GOLD
+    lives_ = level.initialLives or Config.INITIAL_LIVES
+
+    ResetBattleObjects()
+    Skills.Reset()
+    Hero.Init(level)
+    WaveManager.Init(level)
 end
 
 function Start()
@@ -38,13 +82,10 @@ function Start()
 
     gold_ = Config.INITIAL_GOLD
     lives_ = Config.INITIAL_LIVES
-    Hero.Init()
-    WaveManager.Init()
-    Tower.list = {}
-    Tower.selected = nil
-    Projectile.list = {}
-    Particle.list = {}
-    Enemy.list = {}
+    Skills.Reset()
+    Hero.Init(Config.LEVELS[1])
+    WaveManager.Init(Config.LEVELS[1])
+    EnterTitle()
 
     SubscribeToEvent("Update", "HandleUpdate")
     SubscribeToEvent(nvg_, "NanoVGRender", "HandleNanoVGRender")
@@ -53,7 +94,36 @@ end
 
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
-    local actions = InputController.HandleInput(dt)
+    local actions = InputController.HandleInput(dt, gameState)
+
+    if actions.openLevelSelect then
+        EnterLevelSelect()
+        return
+    end
+
+    if actions.backToTitle then
+        EnterTitle()
+        return
+    end
+
+    if actions.selectLevel then
+        StartLevel(actions.selectLevel)
+        return
+    end
+
+    if actions.restartBattle and gameState.currentLevel then
+        StartLevel(gameState.currentLevel.id)
+        return
+    end
+
+    if actions.returnToMenu then
+        EnterTitle()
+        return
+    end
+
+    if gameState.phase ~= "battle" then
+        return
+    end
 
     if actions.placeTower then
         local newTower
@@ -87,6 +157,7 @@ function HandleUpdate(eventType, eventData)
         end
     end
 
+    gameState.isBattleFinished = lives_ <= 0 or not Hero.state.alive or WaveManager.allComplete
     if lives_ <= 0 or not Hero.state.alive or WaveManager.allComplete then
         if lives_ < 0 then lives_ = 0 end
         Skills.Update(dt)
@@ -144,6 +215,7 @@ function HandleUpdate(eventType, eventData)
     if lives_ <= 0 then
         lives_ = 0
     end
+    gameState.isBattleFinished = lives_ <= 0 or not Hero.state.alive or WaveManager.allComplete
 end
 
 function HandleNanoVGRender(eventType, eventData)
@@ -163,14 +235,27 @@ function HandleNanoVGRender(eventType, eventData)
     nvgFillColor(nvg_, nvgRGBA(30, 40, 30, 255))
     nvgFill(nvg_)
 
-    Path.Draw(nvg_)
-    Tower.DrawAll(nvg_)
-    Enemy.DrawAll(nvg_)
-    Hero.Draw(nvg_)
-    Projectile.DrawAll(nvg_)
-    Particle.DrawAll(nvg_)
-    UI.Render(nvg_, "battle", gold_, lives_,
-              WaveManager.currentWave, Hero.state, screenWidth, screenHeight)
+    if gameState.phase == "battle" then
+        Path.Draw(nvg_)
+        Tower.DrawAll(nvg_)
+        Enemy.DrawAll(nvg_)
+        Hero.Draw(nvg_)
+        Projectile.DrawAll(nvg_)
+        Particle.DrawAll(nvg_)
+    end
+
+    UI.Render(nvg_, {
+        phase = gameState.phase,
+        gold = gold_,
+        lives = lives_,
+        wave = WaveManager.currentWave,
+        heroState = Hero.state,
+        screenWidth = screenWidth,
+        screenHeight = screenHeight,
+        levels = Config.LEVELS,
+        currentLevel = gameState.currentLevel,
+        totalWaves = #WaveManager.waves,
+    })
 
     nvgEndFrame(nvg_)
 end

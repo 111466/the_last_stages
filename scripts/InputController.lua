@@ -7,7 +7,14 @@ InputController.state = {
     placingTower = nil,
 }
 
-function InputController.HandleInput(dt)
+function InputController.Reset()
+    InputController.state.moveX = 0
+    InputController.state.moveY = 0
+    InputController.state.attacking = false
+    InputController.state.placingTower = nil
+end
+
+function InputController.HandleInput(dt, gameState)
     local s = InputController.state
     local actions = {
         placeTower = nil,
@@ -19,10 +26,84 @@ function InputController.HandleInput(dt)
         upgradeSkill = nil,
         buyEquipmentSlot = nil,
         upgradeSelectedTower = false,
+        openLevelSelect = false,
+        backToTitle = false,
+        selectLevel = nil,
+        returnToMenu = false,
+        restartBattle = false,
     }
+    local phase = gameState and gameState.phase or "battle"
     s.moveX = 0
     s.moveY = 0
     s.attacking = false
+
+    if phase == "title" then
+        if input:GetKeyPress(KEY_RETURN) or input:GetKeyPress(KEY_SPACE) then
+            actions.openLevelSelect = true
+        end
+
+        if input:GetMouseButtonPress(MOUSEB_LEFT) then
+            local pos = input:GetMousePosition()
+            local dpr = graphics:GetDPR()
+            local mx = pos.x / dpr
+            local my = pos.y / dpr
+            local screenWidth = graphics:GetWidth() / dpr
+            local screenHeight = graphics:GetHeight() / dpr
+            if UI.GetTitleButtonAt(mx, my, screenWidth, screenHeight) == "start" then
+                actions.openLevelSelect = true
+            end
+        end
+        return actions
+    end
+
+    if phase == "level_select" then
+        if input:GetKeyPress(KEY_ESCAPE) then
+            actions.backToTitle = true
+        end
+
+        if input:GetMouseButtonPress(MOUSEB_LEFT) then
+            local pos = input:GetMousePosition()
+            local dpr = graphics:GetDPR()
+            local mx = pos.x / dpr
+            local my = pos.y / dpr
+            local screenWidth = graphics:GetWidth() / dpr
+            local screenHeight = graphics:GetHeight() / dpr
+
+            local button = UI.GetLevelSelectButtonAt(mx, my, screenWidth, screenHeight)
+            if button == "back" then
+                actions.backToTitle = true
+            else
+                actions.selectLevel = UI.GetLevelCardAt(mx, my, screenWidth, screenHeight, Config.LEVELS)
+            end
+        end
+        return actions
+    end
+
+    if input:GetKeyPress(KEY_ESCAPE) then
+        actions.returnToMenu = true
+    end
+
+    if gameState and gameState.isBattleFinished then
+        if input:GetKeyPress(KEY_R) then
+            actions.restartBattle = true
+        end
+
+        if input:GetMouseButtonPress(MOUSEB_LEFT) then
+            local pos = input:GetMousePosition()
+            local dpr = graphics:GetDPR()
+            local mx = pos.x / dpr
+            local my = pos.y / dpr
+            local screenWidth = graphics:GetWidth() / dpr
+            local screenHeight = graphics:GetHeight() / dpr
+            local button = UI.GetBattleEndButtonAt(mx, my, screenWidth, screenHeight)
+            if button == "restart" then
+                actions.restartBattle = true
+            elseif button == "menu" then
+                actions.returnToMenu = true
+            end
+        end
+        return actions
+    end
 
     if input:GetKeyDown(KEY_A) or input:GetKeyDown(KEY_LEFT) then
         s.moveX = s.moveX - 1

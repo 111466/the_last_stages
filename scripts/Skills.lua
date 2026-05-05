@@ -86,6 +86,15 @@ Skills.slots = {
     { id = "meteor", level = 0, cooldownTimer = 0 },
 }
 
+function Skills.Reset()
+    Skills.slots = {
+        { id = "whirlwind", level = 1, cooldownTimer = 0 },
+        { id = "charge", level = 1, cooldownTimer = 0 },
+        { id = "war_cry", level = 0, cooldownTimer = 0 },
+        { id = "meteor", level = 0, cooldownTimer = 0 },
+    }
+end
+
 function Skills.Update(dt)
     for i, slot in ipairs(Skills.slots) do
         if slot.level > 0 and slot.cooldownTimer > 0 then

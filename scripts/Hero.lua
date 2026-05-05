@@ -43,11 +43,11 @@ Hero.state = {
     thorns = 0,
 }
 
-function Hero.Init()
+function Hero.Init(levelConfig)
     local s = Hero.state
-    s.x = 640
-    s.y = 360
-    s.hp = s.maxHP
+    local spawn = levelConfig and levelConfig.heroSpawn or nil
+    s.x = spawn and spawn.x or 640
+    s.y = spawn and spawn.y or 360
     s.mana = 0
     s.alive = true
     s.killCount = 0
@@ -57,6 +57,7 @@ function Hero.Init()
     s.vy = 0
     s.attackCooldown = 0
     s.animState = "idle"
+    s.animTimer = 0
     s.bonusATK = 0
     s.bonusDEF = 0
     s.bonusHP = 0
@@ -65,7 +66,12 @@ function Hero.Init()
     s.lifesteal = 0
     s.manaRegenMul = 1.0
     s.thorns = 0
+    s._warCryATK = 0
+    s._warCryDEF = 0
+    s._warCryTimer = 0
+    s.equipment = {}
     Hero.RecalcStats()
+    s.hp = s.maxHP
 end
 
 function Hero.Update(dt)

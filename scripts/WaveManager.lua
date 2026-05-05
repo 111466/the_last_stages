@@ -1,68 +1,6 @@
 
 local WaveManager = {}
-
-WaveManager.waves = {
-    {
-        prepTime = 10,
-        groups = {
-            { type = "grunt", count = 6, interval = 1.2, route = "random" },
-        },
-    },
-    {
-        prepTime = 15,
-        groups = {
-            { type = "grunt", count = 8, interval = 1.0, route = "random" },
-            { type = "runner", count = 4, interval = 1.5, route = "A" },
-        },
-    },
-    {
-        prepTime = 15,
-        groups = {
-            { type = "grunt", count = 5, interval = 1.0, route = "A" },
-            { type = "runner", count = 5, interval = 1.0, route = "B" },
-            { type = "grunt", count = 5, interval = 1.0, route = "B" },
-        },
-    },
-    {
-        prepTime = 20,
-        groups = {
-            { type = "grunt", count = 10, interval = 0.7, route = "random" },
-            { type = "brute", count = 2, interval = 4.0, route = "A" },
-            { type = "archer", count = 3, interval = 2.0, route = "B" },
-        },
-    },
-    {
-        prepTime = 20,
-        groups = {
-            { type = "runner", count = 8, interval = 0.6, route = "random" },
-            { type = "brute", count = 3, interval = 3.0, route = "A" },
-            { type = "archer", count = 5, interval = 1.5, route = "B" },
-        },
-    },
-    {
-        prepTime = 20,
-        groups = {
-            { type = "archer", count = 10, interval = 1.0, route = "random" },
-            { type = "grunt", count = 5, interval = 1.5, route = "A" },
-        },
-    },
-    {
-        prepTime = 25,
-        groups = {
-            { type = "grunt", count = 15, interval = 0.5, route = "random" },
-            { type = "brute", count = 4, interval = 2.5, route = "random" },
-            { type = "runner", count = 6, interval = 0.8, route = "B" },
-        },
-    },
-    {
-        prepTime = 30,
-        groups = {
-            { type = "boss", count = 1, interval = 0, route = "A" },
-            { type = "grunt", count = 10, interval = 0.6, route = "B" },
-            { type = "brute", count = 3, interval = 3.0, route = "A" },
-        },
-    },
-}
+WaveManager.waves = {}
 
 WaveManager.currentWave = 0
 WaveManager.spawnQueue = {}
@@ -129,12 +67,20 @@ function WaveManager.StartNextWave()
     WaveManager.waveActive = true
 end
 
-function WaveManager.Init()
+function WaveManager.Init(levelConfig)
+    local source = levelConfig and levelConfig.waves or nil
+    if source then
+        WaveManager.waves = source
+    else
+        WaveManager.waves = {}
+    end
+
     WaveManager.currentWave = 0
     WaveManager.spawnQueue = {}
     WaveManager.spawnTimer = 0
     WaveManager.waveActive = false
-    WaveManager.prepTimer = WaveManager.waves[1].prepTime
+    local firstWave = WaveManager.waves[1]
+    WaveManager.prepTimer = firstWave and firstWave.prepTime or 0
     WaveManager.allComplete = false
 end
 
