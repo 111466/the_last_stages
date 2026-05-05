@@ -1,197 +1,175 @@
-local NativeUI = require("urhox-libs/UI")
 
-local GameUI = {}
+local UI = {}
 
-local root_ = nil
+function UI.Render(nvg, phase, gold, lives, wave, heroState, screenWidth, screenHeight)
+    nvgSave(nvg)
 
-local function setText(id, text)
-    if not root_ then
-        return
+    nvgFillColor(nvg, 20, 25, 35, 220)
+    nvgBeginPath(nvg)
+    nvgRect(nvg, 0, 0, screenWidth, 45)
+    nvgFill(nvg)
+
+    nvgFontSize(nvg, 18)
+    nvgFillColor(nvg, 255, 215, 0, 255)
+    nvgText(nvg, 15, 28, "金币: " .. gold)
+    nvgFillColor(nvg, 255, 80, 80, 255)
+    nvgText(nvg, 160, 28, "生命: " .. lives)
+    nvgFillColor(nvg, 255, 255, 255, 255)
+    nvgText(nvg, 300, 28, "波次: " .. wave .. "/8")
+    nvgFillColor(nvg, 100, 255, 100, 255)
+    nvgText(nvg, 450, 28, "击杀: " .. heroState.killCount)
+
+    UI.DrawHeroBars(nvg, heroState)
+    UI.DrawSkillBar(nvg, screenWidth, screenHeight)
+    UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
+
+    if not WaveManager.waveActive and not WaveManager.allComplete then
+        local remaining = math.ceil(WaveManager.prepTimer)
+        nvgFillColor(nvg, 255, 200, 50, 255)
+        nvgFontSize(nvg, 28)
+        nvgTextAlign(nvg, 1)
+        nvgText(nvg, screenWidth / 2, 80,
+            "下一波: " .. remaining .. "秒")
     end
 
-    local element = root_:FindById(id)
-    if element then
-        element:SetText(text)
+    if WaveManager.allComplete then
+        nvgFillColor(nvg, 100, 255, 100, 255)
+        nvgFontSize(nvg, 36)
+        nvgTextAlign(nvg, 1)
+        nvgText(nvg, screenWidth / 2, screenHeight / 2,
+            "胜利！")
+    end
+
+    if not heroState.alive then
+        nvgFillColor(nvg, 255, 50, 50, 200)
+        nvgFontSize(nvg, 36)
+        nvgTextAlign(nvg, 1)
+        nvgText(nvg, screenWidth / 2, screenHeight / 2,
+            "游戏结束！")
+    end
+
+    nvgRestore(nvg)
+end
+
+function UI.DrawHeroBars(nvg, heroState)
+    local bx = 15
+    local by = 55
+
+    nvgFillColor(nvg, 40, 40, 40, 200)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, bx, by, 180, 16, 4)
+    nvgFill(nvg)
+
+    local hpRatio = heroState.hp / heroState.maxHP
+    local hpColor = hpRatio &gt; 0.5 and {80, 200, 80}
+        or (hpRatio &gt; 0.25 and {220, 180, 40} or {220, 50, 50})
+    nvgFillColor(nvg, hpColor[1], hpColor[2], hpColor[3], 255)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, bx, by, 180 * hpRatio, 16, 4)
+    nvgFill(nvg)
+
+    nvgFillColor(nvg, 255, 255, 255, 255)
+    nvgFontSize(nvg, 12)
+    nvgTextAlign(nvg, 1)
+    nvgText(nvg, bx + 90, by + 12, math.floor(heroState.hp) .. "/" .. heroState.maxHP)
+
+    nvgFillColor(nvg, 30, 30, 60, 200)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, bx, by + 20, 180, 10, 3)
+    nvgFill(nvg)
+    nvgFillColor(nvg, 80, 120, 255, 255)
+    nvgBeginPath(nvg)
+    nvgRoundedRect(nvg, bx, by + 20, 180 * (heroState.mana / Hero.config.maxMana), 10, 3)
+    nvgFill(nvg)
+end
+
+function UI.DrawSkillBar(nvg, screenWidth, screenHeight)
+    local startX = screenWidth / 2 - 120
+    local sy = screenHeight - 70
+
+    for i = 1, 4 do
+        local slot = Skills.slots[i]
+        local sx = startX + (i - 1) * 65
+
+        local unlocked = slot.level &gt; 0
+        local ready = unlocked and slot.cooldownTimer &lt;= 0
+            and Hero.state.mana &gt;= Skills.definitions[slot.id].manaCost
+
+        if ready then
+            nvgFillColor(nvg, 60, 80, 120, 230)
+        elseif unlocked then
+            nvgFillColor(nvg, 40, 40, 50, 200)
+        else
+            nvgFillColor(nvg, 25, 25, 30, 150)
+        end
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, sx, sy, 55, 55, 8)
+        nvgFill(nvg)
+
+        if unlocked and slot.cooldownTimer &gt; 0 then
+            local cdRatio = slot.cooldownTimer / Skills.definitions[slot.id].cooldown
+            nvgFillColor(nvg, 0, 0, 0, 150)
+            nvgBeginPath(nvg)
+            nvgRoundedRect(nvg, sx, sy, 55, 55 * cdRatio, 8)
+            nvgFill(nvg)
+        end
+
+        if unlocked then
+            nvgFillColor(nvg, 255, 255, 255, 255)
+            nvgFontSize(nvg, 11)
+            nvgTextAlign(nvg, 1)
+            nvgText(nvg, sx + 27, sy + 25, Skills.definitions[slot.id].name)
+            nvgFillColor(nvg, 150, 180, 255, 255)
+            nvgFontSize(nvg, 10)
+            nvgText(nvg, sx + 27, sy + 42, "Lv." .. slot.level)
+        else
+            nvgFillColor(nvg, 100, 100, 100, 200)
+            nvgFontSize(nvg, 11)
+            nvgTextAlign(nvg, 1)
+            nvgText(nvg, sx + 27, sy + 30, "未解锁")
+        end
+
+        nvgFillColor(nvg, 180, 180, 180, 200)
+        nvgFontSize(nvg, 10)
+        nvgText(nvg, sx + 20, sy - 5, tostring(i))
     end
 end
 
-local function setVisible(id, visible)
-    if not root_ then
-        return
-    end
+function UI.DrawTowerBar(nvg, gold, screenWidth, screenHeight)
+    local startX = screenWidth - 350
+    local ty = screenHeight - 70
 
-    local element = root_:FindById(id)
-    if element then
-        element:SetVisible(visible)
-    end
-end
+    nvgFillColor(nvg, 255, 255, 255, 200)
+    nvgFontSize(nvg, 14)
+    nvgTextAlign(nvg, 0)
+    nvgText(nvg, startX, ty - 8, "防御塔 (右键放置):")
 
-function GameUI.Init()
-    NativeUI.Init({
-        fonts = {
-            {
-                family = "sans",
-                weights = {
-                    normal = "Fonts/MiSans-Regular.ttf",
-                }
-            }
-        },
-        scale = NativeUI.Scale.DEFAULT,
-    })
+    local towerTypes = { "archer_tower", "cannon_tower", "frost_tower", "lightning_tower" }
+    for i, typeName in ipairs(towerTypes) do
+        local config = Tower.types[typeName]
+        local tx = startX + (i - 1) * 85
 
-    root_ = NativeUI.Panel {
-        id = "root",
-        width = "100%",
-        height = "100%",
-        pointerEvents = "box-none",
-        children = {
-            NativeUI.Panel {
-                id = "hud",
-                position = "absolute",
-                top = 14,
-                left = 14,
-                padding = 12,
-                gap = 6,
-                backgroundColor = { 0, 0, 0, 150 },
-                borderRadius = 8,
-                pointerEvents = "none",
-                children = {
-                    NativeUI.Label { id = "goldLabel", text = "金币: 0", fontSize = 18, fontColor = { 255, 225, 120, 255 } },
-                    NativeUI.Label { id = "livesLabel", text = "生命: 0", fontSize = 16, fontColor = { 255, 120, 120, 255 } },
-                    NativeUI.Label { id = "waveLabel", text = "波次: 0/0", fontSize = 16, fontColor = { 255, 255, 255, 255 } },
-                    NativeUI.Label { id = "statusLabel", text = "状态", fontSize = 14, fontColor = { 180, 220, 255, 255 } },
-                }
-            },
-            NativeUI.Panel {
-                id = "selectionPanel",
-                position = "absolute",
-                top = 14,
-                right = 14,
-                width = 250,
-                padding = 12,
-                gap = 6,
-                backgroundColor = { 0, 0, 0, 150 },
-                borderRadius = 8,
-                pointerEvents = "none",
-                children = {
-                    NativeUI.Label { id = "selectedTowerLabel", text = "当前选择: 弓箭塔", fontSize = 18, fontColor = { 255, 255, 255, 255 } },
-                    NativeUI.Label { id = "selectedTowerHintLabel", text = "按 1/2/3 切换塔类型", fontSize = 14, fontColor = { 210, 210, 210, 255 } },
-                    NativeUI.Label { id = "upgradeLabel", text = "选中塔后按 U 升级", fontSize = 14, fontColor = { 180, 220, 180, 255 } },
-                }
-            },
-            NativeUI.Label {
-                id = "footerLabel",
-                text = "左键放置/选择塔 | 1/2/3 切换塔 | U 升级 | P 暂停 | R 重开",
-                fontSize = 13,
-                fontColor = { 235, 235, 235, 210 },
-                position = "absolute",
-                left = 0,
-                right = 0,
-                bottom = 12,
-                textAlign = "center",
-                pointerEvents = "none",
-            },
-            NativeUI.Panel {
-                id = "menuOverlay",
-                width = "100%",
-                height = "100%",
-                backgroundColor = { 0, 0, 0, 170 },
-                pointerEvents = "none",
-                children = {
-                    NativeUI.Label {
-                        id = "menuTitle",
-                        text = "Tiny Swords 塔防",
-                        fontSize = 42,
-                        fontColor = { 255, 255, 255, 255 },
-                        position = "absolute",
-                        top = 240,
-                        left = 0,
-                        right = 0,
-                        textAlign = "center",
-                    },
-                    NativeUI.Label {
-                        id = "menuHint",
-                        text = "按 Enter 或点击屏幕开始",
-                        fontSize = 20,
-                        fontColor = { 210, 210, 210, 255 },
-                        position = "absolute",
-                        top = 310,
-                        left = 0,
-                        right = 0,
-                        textAlign = "center",
-                    },
-                }
-            },
-            NativeUI.Panel {
-                id = "resultOverlay",
-                visible = false,
-                width = "100%",
-                height = "100%",
-                backgroundColor = { 0, 0, 0, 165 },
-                pointerEvents = "none",
-                children = {
-                    NativeUI.Label {
-                        id = "resultTitle",
-                        text = "胜利",
-                        fontSize = 42,
-                        fontColor = { 255, 255, 255, 255 },
-                        position = "absolute",
-                        top = 250,
-                        left = 0,
-                        right = 0,
-                        textAlign = "center",
-                    },
-                    NativeUI.Label {
-                        id = "resultHint",
-                        text = "按 R 或点击屏幕重新开始",
-                        fontSize = 18,
-                        fontColor = { 220, 220, 220, 255 },
-                        position = "absolute",
-                        top = 315,
-                        left = 0,
-                        right = 0,
-                        textAlign = "center",
-                    },
-                }
-            },
-        }
-    }
+        local canAfford = gold &gt;= config.cost
+        nvgFillColor(nvg, canAfford and 50 or 30,
+                     canAfford and 60 or 30,
+                     canAfford and 80 or 40, 220)
+        nvgBeginPath(nvg)
+        nvgRoundedRect(nvg, tx, ty, 75, 55, 6)
+        nvgFill(nvg)
 
-    NativeUI.SetRoot(root_)
-end
+        nvgFillColor(nvg, config.color[1], config.color[2], config.color[3], 255)
+        nvgBeginPath(nvg)
+        nvgCircle(nvg, tx + 37, ty + 18, 12)
+        nvgFill(nvg)
 
-function GameUI.Update(snapshot)
-    setText("goldLabel", "金币: " .. snapshot.gold)
-    setText("livesLabel", "生命: " .. snapshot.lives)
-    setText("waveLabel", string.format("波次: %d/%d", snapshot.wave, snapshot.maxWave))
-    setText("statusLabel", "状态: " .. snapshot.statusText)
-    
-    if snapshot.buildMode == "structure" then
-        setText("selectedTowerLabel", "当前工事: " .. snapshot.selectedStructureName)
-        setText("selectedTowerHintLabel", "费用: " .. snapshot.selectedStructureCost .. " 金币")
-    else
-        setText("selectedTowerLabel", "当前选择: " .. snapshot.selectedTowerName)
-        setText("selectedTowerHintLabel", "费用: " .. snapshot.selectedTowerCost .. " 金币")
-    end
-    
-    setText("upgradeLabel", snapshot.upgradeText)
-    setText("footerLabel", "建造模式: " .. (snapshot.buildMode == "structure" and "工事(Tab切换)" or "塔") .. " | 左键放置 | 1-3塔 | 4-6工事 | U升级 | P暂停 | R重开")
-
-    setVisible("menuOverlay", snapshot.state == "menu")
-    setVisible("resultOverlay", snapshot.state == "victory" or snapshot.state == "game_over")
-
-    if snapshot.state == "victory" then
-        setText("resultTitle", "守住了")
-        setText("resultHint", "全部波次完成，按 R 或点击屏幕重开")
-    elseif snapshot.state == "game_over" then
-        setText("resultTitle", "防线失守")
-        setText("resultHint", "按 R 或点击屏幕重新开始")
+        nvgFillColor(nvg, 255, 255, 255, 255)
+        nvgFontSize(nvg, 12)
+        nvgTextAlign(nvg, 1)
+        nvgText(nvg, tx + 37, ty + 40, config.name)
+        nvgFillColor(nvg, 255, 215, 0, 255)
+        nvgFontSize(nvg, 10)
+        nvgText(nvg, tx + 37, ty + 52, config.cost .. "G")
     end
 end
 
-function GameUI.Shutdown()
-    NativeUI.Shutdown()
-    root_ = nil
-end
-
-return GameUI
+return UI
